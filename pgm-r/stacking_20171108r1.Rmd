@@ -1,6 +1,6 @@
 ---
 title : DS養成講座  銀行の顧客ターゲティング
-author : Shnji KAWASOE
+author : Shinji KAWASOE
 date   : 2017/11/08
 output :
   html_document:

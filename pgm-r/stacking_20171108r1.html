@@ -9,7 +9,7 @@
 <meta name="generator" content="pandoc" />
 
 
-<meta name="author" content="Shnji KAWASOE" />
+<meta name="author" content="Shinji KAWASOE" />
 
 
 <title>DS養成講座 銀行の顧客ターゲティング</title>
@@ -117,7 +117,7 @@ $(document).ready(function () {
 
 
 <h1 class="title toc-ignore">DS養成講座 銀行の顧客ターゲティング</h1>
-<h4 class="author"><em>Shnji KAWASOE</em></h4>
+<h4 class="author"><em>Shinji KAWASOE</em></h4>
 <h4 class="date"><em>2017/11/08</em></h4>
 
 </div>
@@ -155,7 +155,7 @@ $(document).ready(function () {
 <div class="section level2">
 <h2><span class="header-section-number">1.1</span> 投稿結果</h2>
 <p>0.92443</p>
-<p>boostingやランダムフォレストを利用せずに、ロジスティック回帰や決定木で0.92くらい出ると頑張って いる方だそうです。</p>
+<p>boostingやランダムフォレストを利用せずに、ロジスティック回帰や決定木で0.9オーバーは頑張っている 方だそうです。</p>
 </div>
 <div class="section level2">
 <h2><span class="header-section-number">1.2</span> 手法の工夫</h2>
@@ -163,19 +163,20 @@ $(document).ready(function () {
 <li>Stackingで決定木とロジステック回帰を利用。</li>
 <li>pdaysで前回キャンペーン有無を分割し、それぞれでモデル作成</li>
 <li>month,dayよりDate型作成。最終接触date(lastdate)と前回キャンペーンdate(pdate)</li>
-<li>age, balance, duratinoの外れ値を除去し、オッズ比を線形化</li>
+<li>age, balance, durationの外れ値を除去し、オッズ比を線形化</li>
 <li>全項目でモデル作成。</li>
 </ul>
 </div>
 <div class="section level2">
 <h2><span class="header-section-number">1.3</span> その他</h2>
-<p>HoldOutでカラム絞り込みしてモデル作成をチューニングしたが、値が減少した。<br />
-0.92443 → 0.91348</p>
+<p>HoldOutでチューニングを試みたが、値が減少した。<br />
+0.92443 → 0.91348<br />
+変数の相関や目的変数への寄与方法などもう少し分析が必要。</p>
 </div>
 <div class="section level2">
 <h2><span class="header-section-number">1.4</span> 注意点</h2>
 <p>最終接触時間(duration)はリーク(Leakage)にあたるパラメータなので、モデル作成としては不正解です。 接触時間は、未来の情報なのでモデル作成時にはない情報になります。<br />
-この事は本モデル作成後に講義で学んだことですので、その点は参照する上で注意が必要です。</p>
+リークの考え方は、本モデル作成後に講義で学んだことですので、以下を参照する上で注意が必要です。</p>
 </div>
 </div>
 <div class="section level1">
