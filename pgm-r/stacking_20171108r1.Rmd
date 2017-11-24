@@ -59,7 +59,146 @@ test<-read.csv("../motodata/test.csv", header=TRUE)
 test$y <- 9
 combi <- rbind(train,test)
 ```
-## JOBのグループ化
+## モデル構築への工夫(検討)
+ロジスティック回帰を利用する場合、非線形な変数や外れ値の影響を減らすことで精度が向上する。  
+多重共線性がないか、相関が高い変数が説明変数に含まれないか確認する。  
+参考：20171011_ロジスティック回帰.pdf
+
+### 年齢(age)
+年代ごとに対数オッズ$\frac{p}{1 - p}$の関係を確認し、線形性を持つように加工する。
+
+```{r}
+train %>%
+  dplyr::mutate(age_c = floor(age/10)*10) %>%
+  dplyr::group_by(age_c) %>%
+  dplyr::summarise(p=mean(y)) %>%
+  dplyr::ungroup(.) %>%
+  dplyr::mutate(log_odds=log(p/(1-p))) %>%
+  ggplot(mapping = aes(x=age_c, y=log_odds)) + geom_line()
+
+```
+50才でV字の形状なので、$x{\prime} = |50 - x|$として50で折り返して直線にする。
+
+```{r}
+train <- train %>%
+  dplyr::mutate(age2=abs(50-age))
+
+# 再び線形性の確認
+train %>%
+  dplyr::mutate(age_c = floor(age2/10)*10) %>%
+  dplyr::group_by(age_c) %>%
+  dplyr::summarise(p=mean(y)) %>%
+  dplyr::ungroup(.) %>%
+  dplyr::mutate(log_odds=log(p/(1-p))) %>%
+  ggplot(mapping = aes(x=age_c, y=log_odds)) + geom_line()
+```
+
+### 年間平均残高(balance)
+外れ値を確認する。
+
+```{r}
+hist(train$balance)
+```
+
+右に大きくゆがんでいるので、95%タイルで丸める。95%以上は95%値とする。
+```{r}
+## パーセンタイル点の確認
+quantile(train$balance,probs=c(.05,.95))
+
+## 丸め(ifelse(条件式, 真のとき返す値, 偽のとき返す値))
+train <- train %>%
+  dplyr::mutate(balance2=ifelse(balance >= quantile(balance,probs=.95),
+                                quantile(balance,probs=.95),
+                                balance))
+
+## 外れ値の確認
+hist(train$balance2)
+```
+
+### 最終接触時間(duration)
+外れ値を確認し、丸める。
+```{r}
+## 外れ値の確認
+hist(train$duration)
+
+## パーセンタイル点の確認
+quantile(train$duration ,probs=c(.05,.95))
+
+## 丸め(ifelse(条件式, 真のとき返す値, 偽のとき返す値))上のみ
+train <- train %>%
+  dplyr::mutate(duration2=ifelse(duration >= quantile(duration,probs=.95),
+                                quantile(duration,probs=.95),
+                                duration))
+
+## 外れ値の確認
+hist(train$duration2)
+```
+
+対数オッズ$\frac{p}{1 - p}$の関係を確認し、線形性を持つように加工する。  
+
+```{r}
+train %>%
+    dplyr::mutate(duration_c = floor(duration2/50)*50) %>%
+    dplyr::group_by(duration_c) %>%
+    dplyr::summarise(p=mean(y)) %>%  ####p反応率
+    dplyr::ungroup(.) %>%
+    dplyr::mutate(log_odds=log(p/(1-p))) %>%
+    ggplot(mapping = aes(x=duration_c, y=log_odds)) + geom_line()
+```
+
+$y = \log x$のグラフに見えるので、$\sqrt{x}$をとる。
+
+```{r}
+train <- train %>%
+    dplyr::mutate(duration3 = sqrt(duration2))
+
+##再び線形性の確認
+train %>%
+    ## duration2ごとの対数オッズを計算
+    dplyr::mutate(duration_c = floor(duration3/5)*5) %>%
+    dplyr::group_by(duration_c) %>%
+    dplyr::summarise(p=mean(y)) %>%  ####p反応率
+    dplyr::ungroup(.) %>%
+    dplyr::mutate(log_odds=log(p/(1-p))) %>%
+    ggplot(mapping = aes(x=duration_c, y=log_odds)) + geom_line()
+```
+
+## 相関係数の確認
+多重共線性を確認する。  
+(めやす)相関係数をrとすると  
+
+|\|r\||相関|
+|---|---|
+|0.7～1|かなり強い相関がある|
+|0.4～0.7|やや相関あり|
+|0.2～0.4|弱い相関あり|
+|0～0.2|ほとんど相関なし|
+
+```{r}
+cor(train[,c("age2", "balance2", "duration3")])
+```
+
+結果、全て*ほとんど関係なし*なので、多重共線性の問題はないと考える。
+
+## モデル構築に向けたデータ加工
+検討結果より次の加工を実施する。
+
+*最終接触時間(duration)は外れ値を0.995%tileを寄せる。線形にするため、ルートを取る。
+*年齢(age)は、50で折り返し。
+*年間平均残高(balance)は、95%tileを取る。
+
+```{r}
+combi <- combi %>%
+    dplyr::mutate(duration2=ifelse(duration >= quantile(duration,probs=.995),
+                                   quantile(duration,probs=.995),
+                                   duration)) %>%
+    dplyr::mutate(duration3 = sqrt(duration2)) %>%
+    dplyr::mutate(age2=abs(50-age)) %>%
+    dplyr::mutate(balance2=ifelse(balance >= quantile(balance,probs=.95),
+                                  quantile(balance,probs=.95),
+                                  balance))
+```
+## カテゴリデータへの加工(JOBのグループ化)
 * 働いているか否か。
 * majorかminorか。
 ```{r}
@@ -74,23 +213,8 @@ combi <- combi %>%
                                , 'minor')) %>%
     dplyr::mutate(job3 = as.factor(job3)) 
 ```
-## 数値データに線形性を持たせる加工
-* 最終接触時間(duration)は外れ値を0.995%tileを寄せる。線形にするため、ルートを取る。
-* 年齢(age)は、50で折り返し。
-* 年間平均残高(balance)は、95%tileを取る。
-
-```{r}
-combi <- combi %>%
-    dplyr::mutate(duration2=ifelse(duration >= quantile(duration,probs=.995),
-                                   quantile(duration,probs=.995),
-                                   duration)) %>%
-    dplyr::mutate(duration3 = sqrt(duration2)) %>%
-    dplyr::mutate(age2=abs(50-age)) %>%
-    dplyr::mutate(balance2=ifelse(balance >= quantile(balance,probs=.95),
-                                  quantile(balance,probs=.95),
-                                  balance))
-```
-## trainとtestに分割する。
+## モデル作成の準備
+### trainとtestに分割する。
 ```{r}
 train <- combi %>%
     dplyr::filter(y < 9)
@@ -99,7 +223,7 @@ test <- combi %>%
     dplyr::select(-y)
 ```
 
-## 精度向上のため、前回キャンペーン有無でデータとモデルを分割する。
+### 精度向上のため、前回キャンペーン有無でデータとモデルを分割する。
 
 ```{r}
 train_old <- train %>%
@@ -126,6 +250,7 @@ test_old <- test_old %>%
     mutate(pdate = as.POSIXct(as.Date(paste(day,month,"2017",sep=""),"%d%b%Y") - pdays))
 Sys.setlocale("LC_TIME", lct)
 ```
+
 # モデル構築(スタッキングの実装)
 今回は決定木(rpart)とロジスティック回帰(glm)をロジスティック回帰(glm)でアンサンブル
 
